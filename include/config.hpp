@@ -1,5 +1,20 @@
-#include "AgriArenaClient.hpp"
+#ifdef USE_HTTPS
+#include <WiFiClientSecure.h>
+#else
+#include <WiFi.h>
+#endif
+
+#include <ArduinoJson.h>
+#include <DHT.h>
+#include <HTTPClient.h>
+#include <SoftwareSerial.h>
+
+#include <map>
+
+#include "OLED.hpp"
 #include "WifiConfiguration.hpp"
+
+// ---------------------------------------------------------------------------
 
 // For General Purpose
 const uint8_t SWITCH = 0;
