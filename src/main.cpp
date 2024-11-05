@@ -4,7 +4,7 @@ WifiConfiguration wifi(WIFI_SSID, WIFI_PASSWORD);
 
 // Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
-#ifdef DHT_PIN
+#if defined(DHT_PIN) && (DHT_PIN != 0)
 DHT dht(DHT_PIN, DHT_TYPE);
 #endif
 
@@ -37,16 +37,16 @@ void setup() {
         esp_deep_sleep_start();
     }
 
-#ifdef MOISTURE_PIN
+#if defined(MOISTURE_PIN) && (MOISTURE_PIN != 0)
     pinMode(MOISTURE_PIN, INPUT);
 #endif
 
-#ifdef DHT_PIN
+#if defined(DHT_PIN) && (DHT_PIN != 0)
     dht.begin();
     delay(1000);
 #endif
 
-#if defined(NPK_RE) && defined(NPK_DE)
+#if defined(NPK_RE) && defined(NPK_DE) && (NPK_RE != 0) && (NPK_DE != 0)
     npk.begin(NPK_BAUD_RATE);
     pinMode(NPK_RE, OUTPUT);
     pinMode(NPK_DE, OUTPUT);
@@ -78,14 +78,14 @@ void agri_arena_iot() {
     std::map<String, float> res;
 
 // pH
-#ifdef PH_PIN
+#if defined(PH_PIN) && (PH_PIN != 0)
     float rawpH = analogRead(PH_PIN);
     res["ph"] = ((0.795 * (rawpH * 3.30 / 4095)) - 1.63);
     delay(1000);
 #endif
 
 // Soil Moisture
-#ifdef MOISTURE_PIN
+#if defined(MOISTURE_PIN) && (MOISTURE_PIN != 0)
     const int valAir = 1550;
     const int valWater = 1065;
 
@@ -100,7 +100,7 @@ void agri_arena_iot() {
 #endif
 
 // DHT
-#ifdef DHT_PIN
+#if defined(DHT_PIN) && (DHT_PIN != 0)
     float H = dht.readHumidity();
     float T = dht.readTemperature();
     if(isnan(H)) {
@@ -115,7 +115,7 @@ void agri_arena_iot() {
 #endif
 
 // NPK
-#if defined(NPK_RE) && defined(NPK_DE)
+#if defined(NPK_RE) && defined(NPK_DE) && (NPK_RE != 0) && (NPK_DE != 0)
     float N = 0, P = 0, K = 0;
     digitalWrite(NPK_RE, HIGH);
     digitalWrite(NPK_DE, HIGH);
