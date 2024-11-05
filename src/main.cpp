@@ -1,8 +1,8 @@
 #include "config.hpp"
 
-WifiConfiguration wifi(WIFI_SSID, WIFI_PASSWORD);
-
-// Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+#if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+#endif
 
 #if defined(DHT_PIN) && (DHT_PIN != 0)
 DHT dht(DHT_PIN, DHT_TYPE);
@@ -12,6 +12,7 @@ DHT dht(DHT_PIN, DHT_TYPE);
 SoftwareSerial npk(NPK_RX, NPK_TX);
 #endif
 
+WifiConfiguration wifi(WIFI_SSID, WIFI_PASSWORD);
 const uint64_t deviceId = ESP.getEfuseMac();
 
 #ifdef USE_HTTPS
@@ -27,49 +28,53 @@ void setup() {
     Serial.println("Starting...");
 
 #ifdef USE_HTTPS
-    this->client.setCACert(certificate);
+    client.setCACert(certificate);
 #endif
+    client.setTimeout(10000);
     http.begin(client, ENDPOINT);
     http.addHeader("Content-Type", "application/json");
 
     if(!wifi.config()) {
         Serial.println("Wifi not configured successfully!");
-        esp_deep_sleep_start();
+        // esp_deep_sleep_start();
     }
 
-#if defined(MOISTURE_PIN) && (MOISTURE_PIN != 0)
-    pinMode(MOISTURE_PIN, INPUT);
-#endif
-
-#if defined(DHT_PIN) && (DHT_PIN != 0)
+#if defined(DHT_PIN)
     dht.begin();
     delay(1000);
 #endif
 
-#if defined(NPK_RE) && defined(NPK_DE) && (NPK_RE != 0) && (NPK_DE != 0)
+#if defined(MOISTURE_PIN)
+    pinMode(MOISTURE_PIN, INPUT);
+    delay(1000);
+#endif
+
+#if defined(NPK_RE) && defined(NPK_DE)
     npk.begin(NPK_BAUD_RATE);
     pinMode(NPK_RE, OUTPUT);
     pinMode(NPK_DE, OUTPUT);
     delay(1000);
 #endif
 
-    // if(display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS)) {
-    //     Serial.println(F("SSD1306 allocation failed"));
-    //     esp_deep_sleep_start();
-    // }
-    // display.display();
-    // delay(2000);
-    // display.clearDisplay();
-    // display.setTextColor(SSD1306_WHITE);
+#if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
+    if(display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS)) {
+        Serial.println(F("SSD1306 allocation failed"));
+        esp_deep_sleep_start();
+    }
+    display.display();
+    delay(2000);
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
 
-    // display.setTextSize(2);
-    // display.setCursor(10, 10);
-    // display.println("AGRI ARENA");
-    // delay(2000);
+    display.setTextSize(2);
+    display.setCursor(10, 10);
+    display.println("AGRI ARENA");
+    delay(2000);
 
-    // display.clearDisplay();
-    // display.setTextSize(0);
-    // display.setCursor(0, 0);
+    display.clearDisplay();
+    display.setTextSize(0);
+    display.setCursor(0, 0);
+#endif
 
     delay(5000);
 }
@@ -78,14 +83,14 @@ void agri_arena_iot() {
     std::map<String, float> res;
 
 // pH
-#if defined(PH_PIN) && (PH_PIN != 0)
+#if defined(PH_PIN)
     float rawpH = analogRead(PH_PIN);
     res["ph"] = ((0.795 * (rawpH * 3.30 / 4095)) - 1.63);
     delay(1000);
 #endif
 
 // Soil Moisture
-#if defined(MOISTURE_PIN) && (MOISTURE_PIN != 0)
+#if defined(MOISTURE_PIN)
     const int valAir = 1550;
     const int valWater = 1065;
 
@@ -100,7 +105,7 @@ void agri_arena_iot() {
 #endif
 
 // DHT
-#if defined(DHT_PIN) && (DHT_PIN != 0)
+#if defined(DHT_PIN)
     float H = dht.readHumidity();
     float T = dht.readTemperature();
     if(isnan(H)) {
@@ -115,7 +120,7 @@ void agri_arena_iot() {
 #endif
 
 // NPK
-#if defined(NPK_RE) && defined(NPK_DE) && (NPK_RE != 0) && (NPK_DE != 0)
+#if defined(NPK_RE) && defined(NPK_DE)
     float N = 0, P = 0, K = 0;
     digitalWrite(NPK_RE, HIGH);
     digitalWrite(NPK_DE, HIGH);
@@ -146,7 +151,6 @@ void agri_arena_iot() {
     delay(1000);
 #endif
 
-    // After collecting all experiments send these to the server
     DynamicJsonDocument data(JSON_OBJECT_SIZE(res.size() + 2));
     for(const auto &kv : res) {
         data[kv.first.c_str()] = kv.second;
@@ -168,6 +172,7 @@ void agri_arena_iot() {
         Serial.print("Error on sending POST: ");
         Serial.println(httpResponseCode);
     }
+    http.end();
 }
 
 void loop() {

@@ -36,7 +36,7 @@
 #define PH_PIN 34
 
 // For NPK Sensor
-#define NPK_RE 4
+#define NPK_RE 5
 #define NPK_DE 2
 #define NPK_RX 22
 #define NPK_TX 23
