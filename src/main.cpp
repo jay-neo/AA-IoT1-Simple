@@ -1,7 +1,8 @@
 #include "config.hpp"
 
 WifiConfiguration wifi(WIFI_SSID, WIFI_PASSWORD);
-OLED display(DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_ADDRESS);
+
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
 DHT dht(DHT_PIN, DHT_TYPE);
 SoftwareSerial npk(NPK_RX, NPK_TX);
@@ -33,11 +34,27 @@ void setup() {
 
     if(!wifi.config()) {
         Serial.println("Wifi not configured successfully!");
-        display.error("Error: WiFi Configuration");
         esp_deep_sleep_start();
     }
 
-    display.wellcome();
+    if(display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS)) {
+        Serial.println(F("SSD1306 allocation failed"));
+        esp_deep_sleep_start();
+    }
+    display.display();
+    delay(2000);
+
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+
+    display.setTextSize(2);
+    display.setCursor(10, 10);
+    display.println("AGRI ARENA");
+    delay(2000);
+
+    display.clearDisplay();
+    display.setTextSize(0);
+    display.setCursor(0, 0);
 }
 
 void agri_arena_iot1() {
@@ -131,7 +148,6 @@ void loop() {
         agri_arena_iot1();
     } else {
         Serial.println("Wifi disconnectd!");
-        display.error("Error: WiFi Disconnected");
     }
     delay(5000);
 }
