@@ -190,7 +190,7 @@ void agri_arena_iot() {
     for(const auto& kv : res) {
         data[kv.first.c_str()] = kv.second;
     }
-    data["iot"] = deviceId;
+    data["device"] = deviceId;
 
     String jsonString;
     serializeJson(data, jsonString);
@@ -248,7 +248,7 @@ void setup() {
         display.setTextColor(SSD1306_WHITE);
 
         display.setTextSize(2);
-        display.setCursor(5, 24);
+        display.setCursor(0, 0);
         display.println("AGRI ARENA");
         display.display();
         delay(5000);
@@ -284,6 +284,7 @@ void setup() {
         delay(1000);
     }
     delay(1000);
+    print_message("Ready!");
 }
 
 void loop() {
