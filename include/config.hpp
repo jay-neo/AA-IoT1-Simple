@@ -1,8 +1,8 @@
-#ifdef USE_HTTPS
-#include <WiFiClientSecure.h>
-#else
-#include <WiFi.h>
-#endif
+// #ifdef USE_HTTPS
+// #include <WiFiClientSecure.h>
+// #else
+// #include <WiFi.h>
+// #endif
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -14,6 +14,7 @@
 
 #include <map>
 
+#include "AgriArenaClient.hpp"
 #include "WifiConfiguration.hpp"
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,8 @@
 
 // For Moisture Sensor
 #define MOISTURE_PIN 12
+#define MOISTURE_UPPER_LIMIT 12
+#define MOISTURE_LOWER_LIMIT 12
 
 // For PH Sensor
 #define PH_PIN 34
