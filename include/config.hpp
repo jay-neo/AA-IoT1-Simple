@@ -1,9 +1,3 @@
-#ifdef USE_HTTPS
-#include <WiFiClientSecure.h>
-#else
-#include <WiFi.h>
-#endif
-
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ArduinoJson.h>
@@ -18,8 +12,8 @@
 #include "WifiConfiguration.hpp"
 
 // ---------------------------------------------------------------------------
-// // For General Purpose
-// #define SWITCH 0
+// For General Purpose
+#define SWITCH 0
 
 // For OLED Display
 #define OLED_WIDTH 0

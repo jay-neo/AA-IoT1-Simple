@@ -1,8 +1,10 @@
 #include "config.hpp"
 
 #ifdef USE_HTTPS
+#include <WiFiClientSecure.h>
 WiFiClientSecure client;
 #else
+#include <WiFi.h>
 WiFiClient client;
 #endif
 
@@ -51,6 +53,7 @@ void print_message(String msg) {
     display.setTextSize(2);
     display.setCursor(2, 0);
     display.println(msg);
+    display.display();
 #endif
 }
 void print_error(String msg) {
@@ -60,6 +63,7 @@ void print_error(String msg) {
     display.setTextSize(2);
     display.setCursor(2, 0);
     display.println(msg);
+    display.display();
 #endif
 }
 void read_dht() {
@@ -110,6 +114,7 @@ void read_moisture() {
 
     float soilMoisture = map(soilMoistureValue, MOISTURE_LOWER_LIMIT, MOISTURE_UPPER_LIMIT, 0, 100);
     res["moisture"] = constrain(soilMoisture, 0, 100);
+    // res["moisture"] = soilMoisture;
 
     delay(1000);
 #endif
@@ -119,7 +124,7 @@ void read_ph() {
     float ph = 0;
     uint8_t s = 0, r = 0;
     while(r < 5) {
-        ph = analogRead(PH_PIN);
+        ph += analogRead(PH_PIN);
         if(!isnan(ph)) {
             ++s;
         }
@@ -129,8 +134,11 @@ void read_ph() {
     if(isnan(ph) && r >= 10) {
         print_error("ERROR: PH Reading");
     } else if(s > 0) {
-        ph = (ph * s * 0.003844) - 1.63;
-        res["ph"] = ph;
+        ph = (ph * 0.003844) / (s * 1.0) - 1.63;
+        // ph = ((7 - ((ph * 3.3 / 4095.0) - 2.5) / 0.17) * 0.795) - 1.63;
+        if(ph > 0 && ph < 14) {
+            res["ph"] = ph;
+        }
     }
 
     delay(1000);
@@ -228,40 +236,42 @@ void setup() {
     }
     http.addHeader("Content-Type", "application/json");
 
-#if defined(OLED_WIDTH) && defined(OLED_HEIGHT) && defined(OLED_ADDRESS) && defined(OLED_SDA) && \
-    defined(OLED_SCL)
+#if defined(OLED_DISPLAY)
     I2C_OLED.begin(OLED_SDA, OLED_SCL);
     if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         Serial.println(F("SSD1306 allocation failed"));
     } else {
-        display.display();
         delay(2000);
+
         display.clearDisplay();
         display.setTextColor(SSD1306_WHITE);
 
-        display.setTextSize(3);
-        display.setCursor(5, 5);
+        display.setTextSize(2);
+        display.setCursor(0, 0);
         display.println("AGRI ARENA");
-        delay(2000);
+        display.display();
+        delay(5000);
     }
 #endif
     print_message("Intializing...");
 
 #if defined(DHT_SENSOR)
     dht.begin();
+    delay(2000);
 #endif
 
 #if defined(MOISTURE_SENSOR)
     pinMode(MOISTURE_PIN, INPUT);
+    delay(2000);
 #endif
 
 #if defined(NPK_SENSOR)
     npk.begin(NPK_BAUD_RATE);
     pinMode(NPK_RE, OUTPUT);
     pinMode(NPK_DE, OUTPUT);
+    delay(2000);
 #endif
 
-    delay(2000);
     for(int8_t i = 0; i < 5; ++i) {
         read_dht();
         delay(1000);
