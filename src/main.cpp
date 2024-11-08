@@ -1,198 +1,237 @@
 #include "config.hpp"
 
-#if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
-Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+#ifdef USE_HTTPS
+WiFiClientSecure client;
+#else
+WiFiClient client;
 #endif
 
-#if defined(DHT_PIN)
+HTTPClient http;
+WifiConfiguration wifi(WIFI_SSID, WIFI_PASSWORD);
+
+std::map<String, float> res;
+uint64_t deviceId = ESP.getEfuseMac();
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////  AGRI ARENA IoT-1 ///////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if defined(OLED_WIDTH) && defined(OLED_HEIGHT) && defined(OLED_RESET)
+#define OLED_DISPLAY 1
+TwoWire I2C_OLED = TwoWire(0);
+Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &I2C_OLED, OLED_RESET);
+#endif
+
+#if defined(DHT_PIN) && defined(DHT_TYPE)
+#define DHT_SENSOR 1
 DHT dht(DHT_PIN, DHT_TYPE);
 #endif
 
-#if defined(NPK_RX) && defined(NPK_TX)
+#if defined(MOISTURE_PIN) && defined(MOISTURE_UPPER_LIMIT) && defined(MOISTURE_LOWER_LIMIT)
+#define MOISTURE_SENSOR 1
+#endif
+
+#if defined(PH_PIN)
+#define PH_SENSOR 1
+#endif
+
+#if defined(NPK_RX) && defined(NPK_TX) && defined(NPK_RE) && defined(NPK_DE) && defined(NPK_BAUD_RATE)
+#define NPK_SENSOR 1
 SoftwareSerial npk(NPK_RX, NPK_TX);
 #endif
 
-WifiConfiguration wifi(WIFI_SSID, WIFI_PASSWORD);
-AgriArenaClient client;
-
-float A = 0, B = 0, C = 0;
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////  AGRI ARENA IoT-1 ///////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
+void print_message(String msg) {
+    Serial.println(msg);
+#if defined(OLED_DISPLAY)
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setCursor(2, 0);
+    display.println(msg);
+#endif
+}
+void print_error(String msg) {
+    Serial.println(msg);
+#if defined(OLED_DISPLAY)
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setCursor(2, 0);
+    display.println(msg);
+#endif
+}
 void read_dht() {
+#if defined(DHT_SENSOR)
+    float H = 0, T = 0;
     uint8_t r = 0;
-    A = dht.readHumidity();
-    while(isnan(A) && r < 10) {
-        A = dht.readHumidity();
+    H = dht.readHumidity();
+    while(isnan(H) && r < 10) {
+        H = dht.readHumidity();
         ++r;
-        delay(500);
+        delay(1000);
     }
-    if(r >= 10) {
-        Serial.println("ERROR: Humidity Reading");
+    if(isnan(H) && r >= 10) {
+        print_error("ERROR: Humidity Reading");
+    } else {
+        res["humidity"] = H;
     }
 
     r = 0;
-    B = dht.readTemperature();
-    while(isnan(B) && r < 10) {
-        dht.readTemperature();
+    T = dht.readTemperature();
+    while(isnan(T) && r < 10) {
+        T = dht.readTemperature();
         ++r;
-        delay(500);
+        delay(1000);
     }
-    if(r >= 10) {
-        Serial.println("ERROR: Temperature Reading");
+    if(isnan(T) && r >= 10) {
+        print_error("ERROR: Temperature Reading");
+    } else {
+        res["temperature"] = T;
     }
+
+    delay(1000);
+#endif
 }
-float read_moisture() {
+void read_moisture() {
+#if defined(MOISTURE_PIN) && defined(MOISTURE_UPPER_LIMIT) && defined(MOISTURE_LOWER_LIMIT)
     int soilMoistureValue = analogRead(MOISTURE_PIN);
     uint8_t r = 0;
     while(isnan(soilMoistureValue) && r < 10) {
         soilMoistureValue = analogRead(MOISTURE_PIN);
         ++r;
-        delay(500);
+        delay(1000);
     }
 
-    if(r >= 10) {
-        Serial.println("ERROR: Moisture Reading");
+    if(isnan(soilMoistureValue) && r >= 10) {
+        print_error("ERROR: Moisture Reading");
     }
 
     float soilMoisture = map(soilMoistureValue, MOISTURE_LOWER_LIMIT, MOISTURE_UPPER_LIMIT, 0, 100);
-    return constrain(soilMoisture, 0, 100);
-}
-float read_ph() {
-    // float rawpH = analogRead(PH_PIN);
-    // return ((0.795 * (rawpH * 3.30 / 4095)) - 1.63);
+    res["moisture"] = constrain(soilMoisture, 0, 100);
 
-    float raw_ph = 0;
-    for(int i = 0; i < 6; i++) {
-        raw_ph += analogRead(PH_PIN);
+    delay(1000);
+#endif
+}
+void read_ph() {
+#if defined(PH_PIN)
+    float ph = 0;
+    uint8_t s = 0, r = 0;
+    while(r < 5) {
+        ph = analogRead(PH_PIN);
+        if(!isnan(ph)) {
+            ++s;
+        }
+        ++r;
         delay(1000);
     }
-    if(isnan(raw_ph)) {
-        Serial.println("ERROR: PH Reading");
+    if(isnan(ph) && r >= 10) {
+        print_error("ERROR: PH Reading");
+    } else if(s > 0) {
+        ph = (ph * s * 0.003844) - 1.63;
+        res["ph"] = ph;
     }
 
-    float cal_ph = ((float)raw_ph * 3.30 / 4095);
-    float res_ph = ((0.795 * cal_ph) - 1.63);
-    return res_ph;
+    delay(1000);
+#endif
 }
 void read_npk() {
-    digitalWrite(NPK_RE, HIGH);
-    digitalWrite(NPK_DE, HIGH);
+#if defined(NPK_SENSOR)
+    float N = 0, P = 0, K = 0;
+    uint8_t r = 0, s = 0;
     uint8_t values[11];
-    uint8_t r = 0;
-    uint8_t s = 0;
 
-    while(r < 5 && s == 1 && (npk.write(NPK_CODE, sizeof(NPK_CODE)) == 8)) {
-        digitalWrite(NPK_RE, LOW);
+    digitalWrite(NPK_DE, HIGH);
+    digitalWrite(NPK_RE, HIGH);
+    delay(10);
+
+    while(s == 0 && r < 5 && (npk.write(NPK_CODE, sizeof(NPK_CODE)) == 8)) {
         digitalWrite(NPK_DE, LOW);
-        delay(500);
+        digitalWrite(NPK_RE, LOW);
+        delay(100);
+
         if(npk.available() >= 11) {
             for(int i = 0; i < 11; i++) {
                 values[i] = npk.read();
             }
-            A = (values[3] << 8) | values[4];
-            B = (values[5] << 8) | values[6];
-            C = (values[7] << 8) | values[8];
+            N = (values[3] << 8) | values[4];
+            P = (values[5] << 8) | values[6];
+            K = (values[7] << 8) | values[8];
             s = 1;
-
         } else {
             r++;
         }
     }
-    if((s == 0 && r >= 5) || (isnan(A) && isnan(B) && isnan(C))) {
-        Serial.println("ERROR: NPK Reading");
+    if(s == 0 && r >= 5) {
+        print_error("ERROR: NPK Reading");
+    } else if(isnan(N) && isnan(P) && isnan(K)) {
+        print_error("ERROR: No NPK values");
+    } else {
+        res["nitrogen"] = N, res["phosphorus"] = P, res["potassium"] = K;
     }
+
+    delay(1000);
+#endif
 }
-
 void agri_arena_iot() {
-    std::map<String, float> res;
-
-#if defined(MOISTURE_PIN)
-    res["moisture"] = read_moisture();
-    delay(1000);
-#endif
-
-#if defined(DHT_PIN)
-    A = B = 0;
+    res.clear();
     read_dht();
-    res["humidity"] = A, res["temperature"] = B;
-    delay(1000);
-#endif
-
-#if defined(PH_PIN)
-    res["ph"] = read_ph();
-    delay(1000);
-#endif
-
-#if defined(NPK_RE) && defined(NPK_DE)
-    A = B = C = 0;
+    read_moisture();
+    read_ph();
     read_npk();
-    res["nitrogen"] = A, res["phosphorus"] = B, res["potassium"] = C;
-#endif
 
     DynamicJsonDocument data(JSON_OBJECT_SIZE(res.size() + 2));
     for(const auto& kv : res) {
         data[kv.first.c_str()] = kv.second;
     }
+    data["iot"] = deviceId;
 
-    client.send_all(data);
+    String jsonString;
+    serializeJson(data, jsonString);
+
+    Serial.println(jsonString);
+    print_message("Sending...");
+
+    int httpResponseCode = http.POST(jsonString);
+    if(httpResponseCode > 0) {
+        print_message("Successfully send");
+        String response = http.getString();
+        Serial.println(httpResponseCode);
+        Serial.println(response);
+    } else {
+        print_error("ERROR: Sending data!");
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////  AGRI ARENA IoT-1 ///////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup() {
     Serial.begin(115200);
     Serial.println("Starting...");
 
-    if(!client.config(ENDPOINT, TLS_CERTIFICATE)) {
-        Serial.println("ERROR: Server not connected successfully");
-        // esp_deep_sleep_start();
-    }
-
     if(!wifi.config()) {
-        Serial.println("ERROR: Wifi not configured successfully");
+        print_error("ERROR: Wifi not configured successfully");
         // esp_deep_sleep_start();
     }
 
-#if defined(DHT_PIN)
-    dht.begin();
-    delay(2000);
-    for(int8_t i = 0; i < 5; ++i) {
-        read_dht();
-    }
+#ifdef USE_HTTPS
+    client.setCACert(TLS_CERTIFICATE);
 #endif
+    client.setTimeout(10000);
 
-#if defined(MOISTURE_PIN)
-    pinMode(MOISTURE_PIN, INPUT);
-    delay(2000);
-    for(int8_t i = 0; i < 5; ++i) {
-        read_moisture();
+    if(!http.begin(client, ENDPOINT)) {
+        print_error("ERROR: Server not connected successfully");
+        // esp_deep_sleep_start();
     }
-#endif
+    http.addHeader("Content-Type", "application/json");
 
-#if defined(PH_PIN)
-    for(int8_t i = 0; i < 5; ++i) {
-        read_ph();
-    }
-    delay(2000);
-#endif
-
-#if defined(NPK_RE) && defined(NPK_DE)
-    npk.begin(NPK_BAUD_RATE);
-    pinMode(NPK_RE, OUTPUT);
-    pinMode(NPK_DE, OUTPUT);
-    delay(2000);
-    for(int8_t i = 0; i < 5; ++i) {
-        read_npk();
-    }
-#endif
-
-#if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
-    if(!display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS)) {
+#if defined(OLED_WIDTH) && defined(OLED_HEIGHT) && defined(OLED_ADDRESS) && defined(OLED_SDA) && \
+    defined(OLED_SCL)
+    I2C_OLED.begin(OLED_SDA, OLED_SCL);
+    if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
         Serial.println(F("SSD1306 allocation failed"));
     } else {
         display.display();
@@ -200,34 +239,55 @@ void setup() {
         display.clearDisplay();
         display.setTextColor(SSD1306_WHITE);
 
-        display.setTextSize(1);
-        display.setCursor(10, 10);
-        display.println("Wellcome to AgriArena");
+        display.setTextSize(3);
+        display.setCursor(5, 5);
+        display.println("AGRI ARENA");
         delay(2000);
-
-        // display.clearDisplay();
-        // display.setTextSize(0);
-        // display.setCursor(0, 0);
     }
 #endif
+    print_message("Intializing...");
 
-    delay(5000);
+#if defined(DHT_SENSOR)
+    dht.begin();
+#endif
+
+#if defined(MOISTURE_SENSOR)
+    pinMode(MOISTURE_PIN, INPUT);
+#endif
+
+#if defined(NPK_SENSOR)
+    npk.begin(NPK_BAUD_RATE);
+    pinMode(NPK_RE, OUTPUT);
+    pinMode(NPK_DE, OUTPUT);
+#endif
+
+    delay(2000);
+    for(int8_t i = 0; i < 5; ++i) {
+        read_dht();
+        delay(1000);
+        read_moisture();
+        delay(1000);
+        read_npk();
+        delay(1000);
+        read_ph();
+        delay(1000);
+    }
+    delay(1000);
 }
 
 void loop() {
     if(wifi.isAlive()) {
+        print_message("Reading...");
         agri_arena_iot();
-#if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
-        display.clearDisplay();
-        display.setTextSize(2);
-        display.setCursor(5, 5);
-        display.println("AGRI ARENA");
-#endif
     } else {
-        Serial.println("ERROR: Wifi disconnectd");
+        print_error("ERROR: Wifi disconnectd");
         if(!wifi.connect()) {
             Serial.println("ERROR: Failed to connect to WiFi");
         }
     }
     delay(3000);
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////  AGRI ARENA  ////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////
