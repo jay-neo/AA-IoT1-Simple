@@ -14,6 +14,8 @@ WifiConfiguration wifi(WIFI_SSID, WIFI_PASSWORD);
 std::map<String, float> res;
 uint64_t deviceId = ESP.getEfuseMac();
 
+bool readingInProgress = false;
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////  AGRI ARENA IoT-1 ///////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,10 +35,6 @@ DHT dht(DHT_PIN, DHT_TYPE);
 #define MOISTURE_SENSOR 1
 #endif
 
-#if defined(PH_PIN)
-#define PH_SENSOR 1
-#endif
-
 #if defined(NPK_RX) && defined(NPK_TX) && defined(NPK_RE) && defined(NPK_DE) && defined(NPK_BAUD_RATE)
 #define NPK_SENSOR 1
 SoftwareSerial npk(NPK_RX, NPK_TX);
@@ -50,8 +48,8 @@ void print_message(String msg) {
     Serial.println(msg);
 #if defined(OLED_DISPLAY)
     display.clearDisplay();
-    display.setTextSize(2);
-    display.setCursor(2, 0);
+    display.setTextSize(1);
+    display.setCursor(1, 0);
     display.println(msg);
     display.display();
 #endif
@@ -60,8 +58,8 @@ void print_error(String msg) {
     Serial.println(msg);
 #if defined(OLED_DISPLAY)
     display.clearDisplay();
-    display.setTextSize(2);
-    display.setCursor(2, 0);
+    display.setTextSize(1);
+    display.setCursor(1, 0);
     display.println(msg);
     display.display();
 #endif
@@ -114,7 +112,6 @@ void read_moisture() {
 
     float soilMoisture = map(soilMoistureValue, MOISTURE_LOWER_LIMIT, MOISTURE_UPPER_LIMIT, 0, 100);
     res["moisture"] = constrain(soilMoisture, 0, 100);
-    // res["moisture"] = soilMoisture;
 
     delay(1000);
 #endif
@@ -236,6 +233,10 @@ void setup() {
     }
     http.addHeader("Content-Type", "application/json");
 
+#if defined(SWITCH)
+    pinMode(SWITCH, INPUT);
+#endif
+
 #if defined(OLED_DISPLAY)
     I2C_OLED.begin(OLED_SDA, OLED_SCL);
     if(!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
@@ -247,7 +248,7 @@ void setup() {
         display.setTextColor(SSD1306_WHITE);
 
         display.setTextSize(2);
-        display.setCursor(0, 0);
+        display.setCursor(5, 24);
         display.println("AGRI ARENA");
         display.display();
         delay(5000);
@@ -286,6 +287,21 @@ void setup() {
 }
 
 void loop() {
+#if defined(SWITCH)
+    if(digitalRead(SWITCH) == HIGH && !readingInProgress) {
+        readingInProgress = true;
+        if(wifi.isAlive()) {
+            print_message("Reading...");
+            agri_arena_iot();
+        } else {
+            print_error("ERROR: Wifi disconnectd");
+            if(!wifi.connect()) {
+                Serial.println("ERROR: Failed to connect to WiFi");
+            }
+        }
+        readingInProgress = false;
+    }
+#else
     if(wifi.isAlive()) {
         print_message("Reading...");
         agri_arena_iot();
@@ -295,7 +311,9 @@ void loop() {
             Serial.println("ERROR: Failed to connect to WiFi");
         }
     }
-    delay(3000);
+#endif
+
+    delay(2000);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
