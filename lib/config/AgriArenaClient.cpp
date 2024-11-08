@@ -4,6 +4,7 @@ bool AgriArenaClient::config(const String &URL, const char *certificate) {
 #ifdef USE_HTTPS
     client.setCACert(certificate);
 #endif
+    client.setTimeout(10000);
     http.begin(client, URL);
     http.addHeader("Content-Type", "application/json");
 
@@ -16,6 +17,8 @@ void AgriArenaClient::send_all(DynamicJsonDocument data) {
 
     String jsonString;
     serializeJson(data, jsonString);
+
+    Serial.println(jsonString);
 
     int httpResponseCode = http.POST(jsonString);
     if(httpResponseCode > 0) {

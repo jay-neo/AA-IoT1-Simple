@@ -194,21 +194,21 @@ void setup() {
 #if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
     if(!display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS)) {
         Serial.println(F("SSD1306 allocation failed"));
-        esp_deep_sleep_start();
+    } else {
+        display.display();
+        delay(2000);
+        display.clearDisplay();
+        display.setTextColor(SSD1306_WHITE);
+
+        display.setTextSize(1);
+        display.setCursor(10, 10);
+        display.println("Wellcome to AgriArena");
+        delay(2000);
+
+        // display.clearDisplay();
+        // display.setTextSize(0);
+        // display.setCursor(0, 0);
     }
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-
-    display.setTextSize(2);
-    display.setCursor(10, 10);
-    display.println("AGRI ARENA");
-    delay(2000);
-
-    display.clearDisplay();
-    display.setTextSize(0);
-    display.setCursor(0, 0);
 #endif
 
     delay(5000);
@@ -217,6 +217,12 @@ void setup() {
 void loop() {
     if(wifi.isAlive()) {
         agri_arena_iot();
+#if defined(DISPLAY_WIDTH) && defined(DISPLAY_HEIGHT)
+        display.clearDisplay();
+        display.setTextSize(2);
+        display.setCursor(5, 5);
+        display.println("AGRI ARENA");
+#endif
     } else {
         Serial.println("ERROR: Wifi disconnectd");
         if(!wifi.connect()) {
